@@ -15,6 +15,19 @@ interface TeamProgress {
   createdAt: string;
 }
 
+interface ImageAnalysis {
+  id: number;
+  userId: string;
+  teamId: string;
+  timestamp: string;
+  countCycle: number;
+  description: string;
+  aiDependencyFlag: boolean;
+  confidence: number;
+  createdAt: string;
+  member: { name: string };
+}
+
 interface Team {
   id: string;
   name: string;
@@ -25,13 +38,17 @@ interface Team {
 export default function MonitorDashboard() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [progress, setProgress] = useState<Record<string, TeamProgress[]>>({});
+  const [analyses, setAnalyses] = useState<ImageAnalysis[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
 
   useEffect(() => {
     fetchTeams();
-    const interval = setInterval(fetchProgress, 5000);
+    const interval = setInterval(() => {
+      fetchProgress();
+      if (selectedTeam) fetchAnalyses();
+    }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedTeam]);
 
   const fetchTeams = async () => {
     try {
@@ -58,6 +75,20 @@ export default function MonitorDashboard() {
       setProgress(data);
     } catch (error) {
       console.error('Error fetching progress:', error);
+    }
+  };
+
+  const fetchAnalyses = async () => {
+    if (!selectedTeam) return;
+    try {
+      const res = await fetch(`/api/monitor/analyses?teamId=${selectedTeam}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setAnalyses(data);
+      }
+    } catch (error) {
+      console.error('Error fetching analyses:', error);
     }
   };
 
@@ -90,7 +121,45 @@ export default function MonitorDashboard() {
       )}
 
       <div style={{ marginTop: '3rem' }}>
-        <h2>Progress Timeline</h2>
+        <h2>Live Screenshot Analysis</h2>
+        {analyses.length === 0 ? (
+          <p style={{ color: '#666', marginTop: '1rem' }}>No screenshots analyzed yet...</p>
+        ) : (
+          <div style={{ marginTop: '1rem', maxHeight: '400px', overflowY: 'auto' }}>
+            {analyses.map(a => (
+              <div
+                key={a.id}
+                style={{
+                  border: '1px solid #ddd',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  borderRadius: '6px',
+                  background: a.aiDependencyFlag ? '#fff3cd' : '#f8f9fa',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <strong>{a.member.name}</strong>
+                  <span style={{ fontSize: '0.85rem', color: '#666' }}>
+                    {new Date(a.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <p style={{ margin: '0.5rem 0', fontSize: '0.95rem' }}>{a.description}</p>
+                <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                  Confidence: {(a.confidence * 100).toFixed(0)}%
+                  {a.aiDependencyFlag && (
+                    <span style={{ marginLeft: '1rem', color: '#856404', fontWeight: 'bold' }}>
+                      ⚠️ AI Dependency
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: '3rem' }}>
+        <h2>3-Minute Batch Summaries</h2>
         {teamProgress.length === 0 ? (
           <p style={{ color: '#666', marginTop: '1rem' }}>No activity recorded yet...</p>
         ) : (

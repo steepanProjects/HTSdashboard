@@ -19,18 +19,7 @@ export async function saveBatchSummary(summary: BatchSummary) {
       },
     });
 
-    // Save individual analyses
-    await prisma.imageAnalysis.createMany({
-      data: summary.analyses.map((analysis) => ({
-        userId: analysis.userId,
-        teamId: analysis.teamId,
-        timestamp: new Date(analysis.timestamp),
-        countCycle: analysis.countCycle,
-        description: analysis.description,
-        aiDependencyFlag: analysis.aiDependencyFlag,
-        confidence: analysis.confidence,
-      })),
-    });
+    // Individual analyses already saved in processNext()
   } catch (error) {
     console.error('Error saving batch summary:', error);
     throw error;

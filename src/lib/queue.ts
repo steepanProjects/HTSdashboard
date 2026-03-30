@@ -44,6 +44,19 @@ class ProcessingQueue {
       item.status = 'completed';
       item.processedAt = new Date();
       
+      // Save individual analysis immediately to DB
+      await prisma.imageAnalysis.create({
+        data: {
+          userId: result.userId,
+          teamId: result.teamId,
+          timestamp: new Date(result.timestamp),
+          countCycle: result.countCycle,
+          description: result.description,
+          aiDependencyFlag: result.aiDependencyFlag,
+          confidence: result.confidence,
+        },
+      });
+      
       // Store in batch
       const key = `${result.userId}`;
       const batch = this.userBatches.get(key) || [];
@@ -59,6 +72,7 @@ class ProcessingQueue {
     } catch (error) {
       item.status = 'failed';
       item.error = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Processing error:', error);
     }
     
     this.processing = false;
