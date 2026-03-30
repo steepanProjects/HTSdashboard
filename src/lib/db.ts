@@ -15,11 +15,12 @@ export async function saveBatchSummary(summary: BatchSummary) {
         llamaSummary: summary.llamaSummary,
         llamaScore: summary.llamaScore,
         meanScore: summary.meanScore,
+        progressPercentage: summary.progressPercentage,
         aiDependencyDetected: summary.aiDependencyDetected,
       },
     });
 
-    // Individual analyses already saved in processNext()
+    console.log(`✅ Saved batch summary: ${summary.progressPercentage}% progress`);
   } catch (error) {
     console.error('Error saving batch summary:', error);
     throw error;

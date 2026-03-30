@@ -71,3 +71,34 @@ Respond in JSON format:
   "keyActivities": ["activity1", "activity2", ...],
   "concerns": ["concern1", "concern2", ...] or []
 }`;
+
+
+export const PROGRESS_CALCULATOR_PROMPT = (projectTitle: string, projectDescription: string) => `You are calculating the overall project progress percentage for a hackathon project.
+
+PROJECT CONTEXT:
+Title: ${projectTitle}
+Description: ${projectDescription}
+
+You will receive two model summaries (GPT and Llama) that analyzed a 3-minute work session. Your task:
+
+Calculate a realistic progress percentage (0-100%) representing how much of the ENTIRE project is complete.
+
+IMPORTANT GUIDELINES:
+- A 3-minute window is VERY SHORT in a hackathon context
+- Typical progress in 3 minutes: 0.5% to 2% maximum
+- Only give higher percentages if major milestones were completed
+- Consider: project setup, core features, testing, deployment, documentation
+- Be conservative - most hackathon projects take 6-24 hours
+
+Examples:
+- Initial setup/boilerplate: 0.5-1%
+- One small feature implemented: 1-2%
+- Major feature completed: 3-5%
+- Multiple features + testing: 5-10%
+
+Respond in JSON format:
+{
+  "progressPercentage": number (0-100, typically 0.5-2 for 3 minutes),
+  "reasoning": "Brief explanation of the percentage",
+  "estimatedTimeToCompletion": "Estimated hours remaining"
+}`;

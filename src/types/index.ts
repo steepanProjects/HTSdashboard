@@ -27,6 +27,7 @@ export interface BatchSummary {
   llamaSummary: string;
   llamaScore: number;
   meanScore: number;
+  progressPercentage: number;
   aiDependencyDetected: boolean;
 }
 

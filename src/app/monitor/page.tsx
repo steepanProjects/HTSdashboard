@@ -11,6 +11,7 @@ interface TeamProgress {
   gptScore: number;
   llamaScore: number;
   meanScore: number;
+  progressPercentage?: number;
   aiDependencyDetected: boolean;
   createdAt: string;
 }
@@ -181,8 +182,13 @@ export default function MonitorDashboard() {
                     {' - '}
                     {new Date(p.endTime).toLocaleTimeString()}
                   </div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: getScoreColor(p.meanScore) }}>
-                    {p.meanScore.toFixed(1)}
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div style={{ fontSize: '1rem', color: '#666' }}>
+                      Progress: {p.progressPercentage?.toFixed(2)}%
+                    </div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: getScoreColor(p.meanScore) }}>
+                      {p.meanScore.toFixed(1)}
+                    </div>
                   </div>
                 </div>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>

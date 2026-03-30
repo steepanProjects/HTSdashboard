@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import { IncomingData, ImageAnalysis, BatchSummary } from '@/types';
-import { SCOUT_SYSTEM_PROMPT, SUMMARIZER_SYSTEM_PROMPT } from './prompts';
+import { SCOUT_SYSTEM_PROMPT, SUMMARIZER_SYSTEM_PROMPT, PROGRESS_CALCULATOR_PROMPT } from './prompts';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -56,6 +56,10 @@ export async function summarizeBatch(
     `[${i + 1}] ${a.timestamp}: ${a.description} (AI flag: ${a.aiDependencyFlag})`
   ).join('\n');
 
+  // Calculate average AI dependency from individual analyses
+  const aiFlags = analyses.filter(a => a.aiDependencyFlag).length;
+  const avgAiDependency = aiFlags / analyses.length;
+
   // GPT model summary
   const gptResponse = await groq.chat.completions.create({
     model: process.env.GROQ_GPT_MODEL || 'llama-3.1-70b-versatile',
@@ -84,6 +88,29 @@ export async function summarizeBatch(
 
   const meanScore = (gptResult.progressScore + llamaResult.progressScore) / 2;
 
+  // Calculate progress percentage using both model summaries
+  const progressInput = `
+GPT Summary: ${gptResult.summary}
+GPT Score: ${gptResult.progressScore}
+
+Llama Summary: ${llamaResult.summary}
+Llama Score: ${llamaResult.progressScore}
+
+Mean Score: ${meanScore}
+AI Dependency Rate: ${(avgAiDependency * 100).toFixed(0)}%`;
+
+  const progressResponse = await groq.chat.completions.create({
+    model: process.env.GROQ_LLAMA_MODEL || 'llama-3.1-70b-versatile',
+    messages: [
+      { role: 'system', content: PROGRESS_CALCULATOR_PROMPT(projectTitle, projectDescription) },
+      { role: 'user', content: progressInput },
+    ],
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+  });
+
+  const progressResult = JSON.parse(progressResponse.choices[0]?.message?.content || '{}');
+
   return {
     userId,
     teamId,
@@ -95,6 +122,7 @@ export async function summarizeBatch(
     llamaSummary: llamaResult.summary,
     llamaScore: llamaResult.progressScore,
     meanScore,
-    aiDependencyDetected: gptResult.aiDependencyDetected || llamaResult.aiDependencyDetected,
+    progressPercentage: progressResult.progressPercentage || 0,
+    aiDependencyDetected: avgAiDependency >= 0.5 || gptResult.aiDependencyDetected || llamaResult.aiDependencyDetected,
   };
 }

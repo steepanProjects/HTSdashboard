@@ -45,6 +45,7 @@ model TeamProgress {
   llamaSummary          String?
   llamaScore            Float?
   meanScore             Float?
+  progressPercentage    Float?   @default(0)
   aiDependencyDetected  Boolean  @default(false)
   createdAt             DateTime @default(now())
 
