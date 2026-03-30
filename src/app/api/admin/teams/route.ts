@@ -8,6 +8,9 @@ export async function GET() {
         _count: {
           select: { members: true },
         },
+        members: {
+          select: { id: true, name: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -20,14 +23,17 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { name } = await req.json();
+    const { name, projectTitle, projectDescription } = await req.json();
 
-    if (!name) {
-      return NextResponse.json({ error: 'Team name is required' }, { status: 400 });
+    if (!name || !projectTitle || !projectDescription) {
+      return NextResponse.json(
+        { error: 'Team name, project title, and project description are required' },
+        { status: 400 }
+      );
     }
 
     const team = await prisma.team.create({
-      data: { name },
+      data: { name, projectTitle, projectDescription },
     });
 
     return NextResponse.json(team);

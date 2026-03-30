@@ -1,5 +1,6 @@
 import { IncomingData, QueueItem, ImageAnalysis } from '@/types';
 import { analyzeImage } from './groq';
+import { prisma } from './prisma';
 
 class ProcessingQueue {
   private queue: QueueItem[] = [];
@@ -49,8 +50,8 @@ class ProcessingQueue {
       batch.push(result);
       this.userBatches.set(key, batch);
       
-      // Check if we have 15 analyses for this user
-      if (batch.length >= 15) {
+      // Check if we have 6 analyses for this user (3 minutes at 30-second intervals)
+      if (batch.length >= 6) {
         await this.processBatch(result.userId, result.teamId, batch);
         this.userBatches.set(key, []); // Reset batch
       }
@@ -65,11 +66,28 @@ class ProcessingQueue {
   }
 
   private async processBatch(userId: string, teamId: string, analyses: ImageAnalysis[]) {
+    // Get team project details
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { projectTitle: true, projectDescription: true },
+    });
+
+    if (!team) {
+      console.error(`Team ${teamId} not found`);
+      return;
+    }
+
     // Import here to avoid circular dependency
     const { summarizeBatch } = await import('./groq');
     const { saveBatchSummary } = await import('./db');
     
-    const summary = await summarizeBatch(userId, teamId, analyses);
+    const summary = await summarizeBatch(
+      userId,
+      teamId,
+      analyses,
+      team.projectTitle,
+      team.projectDescription
+    );
     await saveBatchSummary(summary);
   }
 

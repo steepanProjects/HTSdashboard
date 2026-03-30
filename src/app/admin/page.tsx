@@ -22,6 +22,8 @@ export default function AdminDashboard() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [teamName, setTeamName] = useState('');
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
   const [memberName, setMemberName] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -51,10 +53,16 @@ export default function AdminDashboard() {
       const res = await fetch('/api/admin/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: teamName }),
+        body: JSON.stringify({
+          name: teamName,
+          projectTitle,
+          projectDescription,
+        }),
       });
       if (res.ok) {
         setTeamName('');
+        setProjectTitle('');
+        setProjectDescription('');
         fetchTeams();
       }
     } finally {
@@ -115,6 +123,22 @@ export default function AdminDashboard() {
               onChange={(e) => setTeamName(e.target.value)}
               required
               style={{ width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
+            />
+            <input
+              type="text"
+              placeholder="Project Title"
+              value={projectTitle}
+              onChange={(e) => setProjectTitle(e.target.value)}
+              required
+              style={{ width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
+            />
+            <textarea
+              placeholder="Project Description"
+              value={projectDescription}
+              onChange={(e) => setProjectDescription(e.target.value)}
+              required
+              rows={4}
+              style={{ width: '100%', padding: '0.5rem', marginBottom: '1rem', resize: 'vertical' }}
             />
             <button
               type="submit"

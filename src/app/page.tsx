@@ -10,6 +10,7 @@ export default function Home() {
       </ul>
       <br />
       <p><a href="/admin" style={{ color: 'blue', textDecoration: 'underline' }}>Go to Admin Dashboard</a></p>
+      <p><a href="/monitor" style={{ color: 'blue', textDecoration: 'underline' }}>Go to Monitor Dashboard</a></p>
     </main>
   );
 }

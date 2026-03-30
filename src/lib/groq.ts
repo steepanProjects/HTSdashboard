@@ -48,9 +48,10 @@ export async function analyzeImage(data: IncomingData): Promise<ImageAnalysis> {
 export async function summarizeBatch(
   userId: string,
   teamId: string,
-  analyses: ImageAnalysis[]
+  analyses: ImageAnalysis[],
+  projectTitle: string,
+  projectDescription: string
 ): Promise<BatchSummary> {
-  const projectContext = 'Hackathon project - context will be provided by dashboard';
   const analysisText = analyses.map((a, i) => 
     `[${i + 1}] ${a.timestamp}: ${a.description} (AI flag: ${a.aiDependencyFlag})`
   ).join('\n');
@@ -59,8 +60,8 @@ export async function summarizeBatch(
   const gptResponse = await groq.chat.completions.create({
     model: process.env.GROQ_GPT_MODEL || 'llama-3.1-70b-versatile',
     messages: [
-      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectContext) },
-      { role: 'user', content: `Analyze these 15 minutes of activity:\n\n${analysisText}` },
+      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectTitle, projectDescription) },
+      { role: 'user', content: `Analyze these 3 minutes of activity (6 screenshots, 30-second intervals):\n\n${analysisText}` },
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },
@@ -72,8 +73,8 @@ export async function summarizeBatch(
   const llamaResponse = await groq.chat.completions.create({
     model: process.env.GROQ_LLAMA_MODEL || 'llama-3.1-70b-versatile',
     messages: [
-      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectContext) },
-      { role: 'user', content: `Analyze these 15 minutes of activity:\n\n${analysisText}` },
+      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectTitle, projectDescription) },
+      { role: 'user', content: `Analyze these 3 minutes of activity (6 screenshots, 30-second intervals):\n\n${analysisText}` },
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },

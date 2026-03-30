@@ -8,12 +8,14 @@ datasource db {
 }
 
 model Team {
-  id        String   @id @default(cuid())
-  name      String
-  members   Member[]
-  progress  TeamProgress[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String
+  projectTitle       String
+  projectDescription String   @db.Text
+  members            Member[]
+  progress           TeamProgress[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("teams")
 }
