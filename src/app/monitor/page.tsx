@@ -34,16 +34,31 @@ export default function MonitorDashboard() {
   }, []);
 
   const fetchTeams = async () => {
-    const res = await fetch('/api/admin/teams');
-    const data = await res.json();
-    setTeams(data);
-    if (data.length > 0 && !selectedTeam) setSelectedTeam(data[0].id);
+    try {
+      const res = await fetch('/api/admin/teams');
+      if (!res.ok) {
+        console.error('Failed to fetch teams:', res.status);
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setTeams(data);
+        if (data.length > 0 && !selectedTeam) setSelectedTeam(data[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
   };
 
   const fetchProgress = async () => {
-    const res = await fetch('/api/monitor/progress');
-    const data = await res.json();
-    setProgress(data);
+    try {
+      const res = await fetch('/api/monitor/progress');
+      if (!res.ok) return;
+      const data = await res.json();
+      setProgress(data);
+    } catch (error) {
+      console.error('Error fetching progress:', error);
+    }
   };
 
   const teamProgress = selectedTeam ? progress[selectedTeam] || [] : [];
@@ -60,7 +75,7 @@ export default function MonitorDashboard() {
           onChange={(e) => setSelectedTeam(e.target.value)}
           style={{ padding: '0.5rem', fontSize: '1rem' }}
         >
-          {teams.map(t => (
+          {Array.isArray(teams) && teams.map(t => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
@@ -70,7 +85,7 @@ export default function MonitorDashboard() {
         <div style={{ marginTop: '2rem', padding: '1.5rem', background: '#f5f5f5', borderRadius: '8px' }}>
           <h2>{team.name}</h2>
           <p><strong>Project:</strong> {team.projectTitle}</p>
-          <p><strong>Members:</strong> {team.members.map(m => m.name).join(', ')}</p>
+          <p><strong>Members:</strong> {Array.isArray(team.members) ? team.members.map(m => m.name).join(', ') : 'None'}</p>
         </div>
       )}
 
