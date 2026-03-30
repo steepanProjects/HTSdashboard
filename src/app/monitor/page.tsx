@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface TeamProgress {
   id: number;
@@ -33,6 +34,7 @@ interface Team {
   id: string;
   name: string;
   projectTitle: string;
+  projectDescription: string;
   members: { id: string; name: string }[];
 }
 
@@ -41,12 +43,14 @@ export default function MonitorDashboard() {
   const [progress, setProgress] = useState<Record<string, TeamProgress[]>>({});
   const [analyses, setAnalyses] = useState<ImageAnalysis[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
     fetchTeams();
     const interval = setInterval(() => {
       fetchProgress();
       if (selectedTeam) fetchAnalyses();
+      setLastUpdated(new Date());
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedTeam]);
@@ -54,10 +58,7 @@ export default function MonitorDashboard() {
   const fetchTeams = async () => {
     try {
       const res = await fetch('/api/admin/teams');
-      if (!res.ok) {
-        console.error('Failed to fetch teams:', res.status);
-        return;
-      }
+      if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) {
         setTeams(data);
@@ -73,7 +74,6 @@ export default function MonitorDashboard() {
       const res = await fetch('/api/monitor/progress');
       if (!res.ok) return;
       const data = await res.json();
-      console.log('Fetched progress data:', data);
       setProgress(data);
     } catch (error) {
       console.error('Error fetching progress:', error);
@@ -97,175 +97,600 @@ export default function MonitorDashboard() {
   const teamProgress = selectedTeam ? progress[selectedTeam] || [] : [];
   const team = teams.find(t => t.id === selectedTeam);
 
-  // Calculate overall AI dependency percentage
+  // Calculate metrics
   const totalBatches = teamProgress.length;
   const aiFlaggedBatches = teamProgress.filter(p => p.aiDependencyDetected).length;
   const aiDependencyPercentage = totalBatches > 0 ? (aiFlaggedBatches / totalBatches) * 100 : 0;
   const isAiDrivenProject = aiDependencyPercentage >= 70;
-
-  // Calculate total team progress percentage (sum of all batch progress)
   const totalTeamProgress = teamProgress.reduce((sum, p) => sum + (p.progressPercentage || 0), 0);
-  const cappedTeamProgress = Math.min(totalTeamProgress, 100); // Cap at 100%
+  const cappedTeamProgress = Math.min(totalTeamProgress, 100);
+  const avgMeanScore = totalBatches > 0 
+    ? teamProgress.reduce((sum, p) => sum + p.meanScore, 0) / totalBatches 
+    : 0;
+
+  const getScoreColor = (score: number): string => {
+    if (score >= 80) return 'var(--color-score-excellent)';
+    if (score >= 60) return 'var(--color-score-good)';
+    if (score >= 40) return 'var(--color-score-moderate)';
+    if (score >= 20) return 'var(--color-score-poor)';
+    return 'var(--color-score-critical)';
+  };
+
+  const getScoreBadge = (score: number) => {
+    if (score >= 80) return { label: 'Excellent', class: 'badge-success' };
+    if (score >= 60) return { label: 'Good', class: 'badge-success' };
+    if (score >= 40) return { label: 'Moderate', class: 'badge-warning' };
+    if (score >= 20) return { label: 'Poor', class: 'badge-warning' };
+    return { label: 'Critical', class: 'badge-error' };
+  };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      <h1>Hackathon Monitor - Live Dashboard</h1>
-
-      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <label style={{ fontWeight: 'bold' }}>Select Team:</label>
-        <select
-          value={selectedTeam}
-          onChange={(e) => setSelectedTeam(e.target.value)}
-          style={{ padding: '0.5rem', fontSize: '1rem' }}
-        >
-          {Array.isArray(teams) && teams.map(t => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => {
-            fetchProgress();
-            if (selectedTeam) fetchAnalyses();
-          }}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
-        >
-          🔄 Refresh
-        </button>
-      </div>
-
-      {team && (
-        <div style={{ marginTop: '2rem', padding: '1.5rem', background: '#f5f5f5', borderRadius: '8px' }}>
-          <h2>{team.name}</h2>
-          <p><strong>Project:</strong> {team.projectTitle}</p>
-          <p><strong>Members:</strong> {Array.isArray(team.members) ? team.members.map(m => m.name).join(', ') : 'None'}</p>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            {/* Total Team Progress */}
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '6px', border: '2px solid #007bff' }}>
-              <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>Total Team Progress</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#007bff' }}>
-                {cappedTeamProgress.toFixed(2)}%
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)' }}>
+      {/* Header */}
+      <header style={{ 
+        borderBottom: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+      }}>
+        <div style={{ 
+          maxWidth: '1400px', 
+          margin: '0 auto', 
+          padding: 'var(--space-4) var(--space-6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <Link 
+              href="/" 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 'var(--space-3)',
+                textDecoration: 'none',
+              }}
+            >
+              <div style={{
+                width: '32px',
+                height: '32px',
+                background: 'var(--color-accent)',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+              }}>
+                ◈
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
-                Based on {totalBatches} batch{totalBatches !== 1 ? 'es' : ''} from all members
-              </div>
+              <span style={{ 
+                fontSize: '16px', 
+                fontWeight: 600, 
+                color: 'var(--color-text-primary)',
+              }}>
+                Monitor
+              </span>
+            </Link>
+            <span style={{ color: 'var(--color-border-strong)' }}>/</span>
+            <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>
+              Live Dashboard
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              fontSize: '13px',
+              color: 'var(--color-text-tertiary)',
+            }}>
+              <span style={{
+                width: '8px',
+                height: '8px',
+                background: 'var(--color-success)',
+                borderRadius: '50%',
+                animation: 'pulse 2s infinite',
+              }} />
+              Live
             </div>
-
-            {/* AI Dependency Analysis */}
-            <div style={{ padding: '1rem', background: isAiDrivenProject ? '#fff3cd' : '#d4edda', borderRadius: '6px', border: `2px solid ${isAiDrivenProject ? '#ffc107' : '#28a745'}` }}>
-              <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>AI Dependency Analysis</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isAiDrivenProject ? '#856404' : '#155724' }}>
-                {aiDependencyPercentage.toFixed(1)}%
-              </div>
-              <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                {aiFlaggedBatches} out of {totalBatches} batches flagged
-              </div>
-              {isAiDrivenProject && (
-                <div style={{ marginTop: '0.5rem', color: '#856404', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                  ⚠️ WARNING: Heavily AI-driven (≥70%)
-                </div>
-              )}
-              {!isAiDrivenProject && aiDependencyPercentage > 0 && (
-                <div style={{ marginTop: '0.5rem', color: '#155724', fontSize: '0.9rem' }}>
-                  ✅ Acceptable AI usage
-                </div>
-              )}
-            </div>
+            <Link 
+              href="/admin" 
+              className="btn btn-ghost"
+              style={{ textDecoration: 'none' }}
+            >
+              Admin
+            </Link>
+            <Link 
+              href="/" 
+              className="btn btn-secondary"
+              style={{ textDecoration: 'none' }}
+            >
+              Home
+            </Link>
           </div>
         </div>
-      )}
+      </header>
 
-      <div style={{ marginTop: '3rem' }}>
-        <h2>Live Screenshot Analysis</h2>
-        {analyses.length === 0 ? (
-          <p style={{ color: '#666', marginTop: '1rem' }}>No screenshots analyzed yet...</p>
-        ) : (
-          <div style={{ marginTop: '1rem', maxHeight: '400px', overflowY: 'auto' }}>
-            {analyses.map(a => (
-              <div
-                key={a.id}
-                style={{
-                  border: '1px solid #ddd',
-                  padding: '1rem',
-                  marginBottom: '0.75rem',
-                  borderRadius: '6px',
-                  background: a.aiDependencyFlag ? '#fff3cd' : '#f8f9fa',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <strong>{a.member.name}</strong>
-                  <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                    {new Date(a.timestamp).toLocaleTimeString()}
+      <main style={{ maxWidth: '1400px', margin: '0 auto', padding: 'var(--space-6)' }}>
+        {/* Team Selector */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-4)',
+          marginBottom: 'var(--space-6)',
+        }}>
+          <div style={{ position: 'relative', minWidth: '280px' }}>
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
+              className="input"
+              style={{ 
+                cursor: 'pointer',
+                paddingRight: 'var(--space-10)',
+              }}
+            >
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <span style={{
+              position: 'absolute',
+              right: 'var(--space-4)',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+              color: 'var(--color-text-tertiary)',
+            }}>
+              ▼
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              fetchProgress();
+              if (selectedTeam) fetchAnalyses();
+              setLastUpdated(new Date());
+            }}
+            className="btn btn-secondary"
+          >
+            ↻ Refresh
+          </button>
+          <span style={{
+            marginLeft: 'auto',
+            fontSize: '13px',
+            color: 'var(--color-text-tertiary)',
+          }}>
+            Updated {lastUpdated.toLocaleTimeString()}
+          </span>
+        </div>
+
+        {team && (
+          <>
+            {/* Team Info Card */}
+            <div className="card-elevated" style={{ 
+              padding: 'var(--space-6)', 
+              marginBottom: 'var(--space-6)',
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}>
+                <div>
+                  <h1 style={{
+                    fontSize: '24px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    marginBottom: 'var(--space-2)',
+                  }}>
+                    {team.name}
+                  </h1>
+                  <p style={{
+                    fontSize: '15px',
+                    color: 'var(--color-text-secondary)',
+                    marginBottom: 'var(--space-4)',
+                  }}>
+                    {team.projectTitle}
+                  </p>
+                  <p style={{
+                    fontSize: '13px',
+                    color: 'var(--color-text-tertiary)',
+                    maxWidth: '600px',
+                    lineHeight: 1.5,
+                  }}>
+                    {team.projectDescription}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  {team.members.map(m => (
+                    <div 
+                      key={m.id}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        background: 'var(--color-surface-elevated)',
+                        borderRadius: 'var(--radius-md)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: 'var(--color-accent)',
+                        border: '1px solid var(--color-border)',
+                      }}
+                      title={m.name}
+                    >
+                      {m.name.charAt(0).toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 'var(--space-5)',
+              marginBottom: 'var(--space-6)',
+            }}>
+              {/* Total Progress */}
+              <div className="stat-card">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)' }}>
+                  <span 
+                    className="stat-value" 
+                    style={{ color: getScoreColor(cappedTeamProgress) }}
+                  >
+                    {cappedTeamProgress.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: '18px', color: 'var(--color-text-tertiary)' }}>%</span>
+                </div>
+                <div className="stat-label">Total Progress</div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--color-text-muted)',
+                  marginTop: 'var(--space-2)',
+                }}>
+                  From {totalBatches} batch summaries
+                </div>
+              </div>
+
+              {/* Average Score */}
+              <div className="stat-card">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)' }}>
+                  <span 
+                    className="stat-value" 
+                    style={{ color: getScoreColor(avgMeanScore) }}
+                  >
+                    {avgMeanScore.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: '18px', color: 'var(--color-text-tertiary)' }}>/100</span>
+                </div>
+                <div className="stat-label">Average Score</div>
+                <div style={{ marginTop: 'var(--space-3)' }}>
+                  <span className={`badge ${getScoreBadge(avgMeanScore).class}`}>
+                    {getScoreBadge(avgMeanScore).label}
                   </span>
                 </div>
-                <p style={{ margin: '0.5rem 0', fontSize: '0.95rem' }}>{a.description}</p>
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  Confidence: {(a.confidence * 100).toFixed(0)}%
-                  {a.aiDependencyFlag && (
-                    <span style={{ marginLeft: '1rem', color: '#856404', fontWeight: 'bold' }}>
-                      ⚠️ AI Dependency
-                    </span>
+              </div>
+
+              {/* AI Dependency */}
+              <div className="stat-card" style={{
+                borderColor: isAiDrivenProject ? 'var(--color-error-border)' : 'var(--color-border)',
+                background: isAiDrivenProject ? 'var(--color-error-subtle)' : 'var(--color-surface)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)' }}>
+                  <span 
+                    className="stat-value" 
+                    style={{ color: isAiDrivenProject ? 'var(--color-error)' : 'var(--color-success)' }}
+                  >
+                    {aiDependencyPercentage.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: '18px', color: 'var(--color-text-tertiary)' }}>%</span>
+                </div>
+                <div className="stat-label">AI Dependency</div>
+                <div style={{ marginTop: 'var(--space-3)' }}>
+                  <span className={`badge ${isAiDrivenProject ? 'badge-error' : 'badge-success'}`}>
+                    {isAiDrivenProject ? 'High Risk' : 'Acceptable'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Batch Count */}
+              <div className="stat-card">
+                <span className="stat-value" style={{ color: 'var(--color-accent)' }}>
+                  {totalBatches}
+                </span>
+                <div className="stat-label">Batches Analyzed</div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--color-text-muted)',
+                  marginTop: 'var(--space-2)',
+                }}>
+                  ~{totalBatches * 3} minutes tracked
+                </div>
+              </div>
+            </div>
+
+            {/* Two Column Layout */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 'var(--space-6)',
+            }}>
+              {/* Live Analysis */}
+              <div>
+                <div className="section-header">
+                  <div>
+                    <h2 className="section-title">Live Screenshot Analysis</h2>
+                    <p className="section-subtitle">
+                      Real-time activity from {analyses.length} screenshots
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-3)',
+                  maxHeight: '600px',
+                  overflowY: 'auto',
+                  paddingRight: 'var(--space-2)',
+                }}>
+                  {analyses.length === 0 ? (
+                    <div className="card-elevated" style={{ padding: 'var(--space-12)' }}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">◉</div>
+                        <div className="empty-state-title">No screenshots yet</div>
+                        <div className="empty-state-desc">
+                          Waiting for Electron app to send screenshots
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    analyses.map(a => (
+                      <div 
+                        key={a.id}
+                        className="card-elevated"
+                        style={{ 
+                          padding: 'var(--space-4)',
+                          borderLeft: a.aiDependencyFlag 
+                            ? '3px solid var(--color-warning)' 
+                            : '3px solid transparent',
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          marginBottom: 'var(--space-3)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            <div style={{
+                              width: '28px',
+                              height: '28px',
+                              background: 'var(--color-surface-elevated)',
+                              borderRadius: 'var(--radius-md)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: 'var(--color-accent)',
+                            }}>
+                              {a.member.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span style={{ 
+                              fontWeight: 500, 
+                              color: 'var(--color-text-primary)',
+                              fontSize: '14px',
+                            }}>
+                              {a.member.name}
+                            </span>
+                          </div>
+                          <span style={{ 
+                            fontSize: '12px', 
+                            color: 'var(--color-text-tertiary)',
+                            fontFamily: 'monospace',
+                          }}>
+                            {new Date(a.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        
+                        <p style={{
+                          fontSize: '14px',
+                          lineHeight: 1.5,
+                          color: 'var(--color-text-secondary)',
+                          marginBottom: 'var(--space-3)',
+                        }}>
+                          {a.description}
+                        </p>
+                        
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-3)',
+                        }}>
+                          <span style={{
+                            fontSize: '12px',
+                            color: 'var(--color-text-tertiary)',
+                          }}>
+                            Confidence: {Math.round(a.confidence * 100)}%
+                          </span>
+                          {a.aiDependencyFlag && (
+                            <span className="badge badge-warning">
+                              AI Flag
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      <div style={{ marginTop: '3rem' }}>
-        <h2>3-Minute Batch Summaries ({teamProgress.length})</h2>
-        {teamProgress.length === 0 ? (
-          <p style={{ color: '#666', marginTop: '1rem' }}>No batch summaries yet (need 6 screenshots = 3 minutes)...</p>
-        ) : (
-          <div style={{ marginTop: '1rem' }}>
-            {teamProgress.map(p => (
-              <div
-                key={p.id}
-                style={{
-                  border: '1px solid #ddd',
-                  padding: '1rem',
-                  marginBottom: '1rem',
-                  borderRadius: '8px',
-                  background: p.aiDependencyDetected ? '#fff3cd' : 'white',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {/* Batch Summaries */}
+              <div>
+                <div className="section-header">
                   <div>
-                    <strong>{new Date(p.startTime).toLocaleTimeString()}</strong>
-                    {' - '}
-                    {new Date(p.endTime).toLocaleTimeString()}
-                  </div>
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <div style={{ fontSize: '1rem', color: '#666' }}>
-                      Progress: {p.progressPercentage?.toFixed(2)}%
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: getScoreColor(p.meanScore) }}>
-                      {p.meanScore.toFixed(1)}
-                    </div>
+                    <h2 className="section-title">3-Minute Batch Summaries</h2>
+                    <p className="section-subtitle">
+                      Dual-model analysis (GPT + Llama)
+                    </p>
                   </div>
                 </div>
-                <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
-                  GPT: {p.gptScore.toFixed(1)} | Llama: {p.llamaScore.toFixed(1)}
+
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-3)',
+                  maxHeight: '600px',
+                  overflowY: 'auto',
+                  paddingRight: 'var(--space-2)',
+                }}>
+                  {teamProgress.length === 0 ? (
+                    <div className="card-elevated" style={{ padding: 'var(--space-12)' }}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">◈</div>
+                        <div className="empty-state-title">No batches yet</div>
+                        <div className="empty-state-desc">
+                          Need 6 screenshots (3 minutes) to generate summary
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    teamProgress.map(p => {
+                      const badge = getScoreBadge(p.meanScore);
+                      return (
+                        <div 
+                          key={p.id}
+                          className="card-elevated"
+                          style={{ 
+                            padding: 'var(--space-4)',
+                            borderLeft: p.aiDependencyDetected 
+                              ? '3px solid var(--color-error)' 
+                              : '3px solid transparent',
+                          }}
+                        >
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: 'var(--space-4)',
+                          }}>
+                            <div>
+                              <div style={{
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: 'var(--color-text-primary)',
+                                marginBottom: 'var(--space-1)',
+                              }}>
+                                {new Date(p.startTime).toLocaleTimeString()} - {new Date(p.endTime).toLocaleTimeString()}
+                              </div>
+                              <div style={{
+                                fontSize: '12px',
+                                color: 'var(--color-text-tertiary)',
+                              }}>
+                                Progress: {p.progressPercentage?.toFixed(2)}%
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{
+                                fontSize: '28px',
+                                fontWeight: 600,
+                                color: getScoreColor(p.meanScore),
+                                lineHeight: 1,
+                              }}>
+                                {p.meanScore.toFixed(1)}
+                              </div>
+                              <span className={`badge ${badge.class}`} style={{ marginTop: 'var(--space-2)' }}>
+                                {badge.label}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Model Scores */}
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 'var(--space-3)',
+                            padding: 'var(--space-3)',
+                            background: 'var(--color-surface-elevated)',
+                            borderRadius: 'var(--radius-md)',
+                            marginBottom: 'var(--space-3)',
+                          }}>
+                            <div>
+                              <div style={{
+                                fontSize: '11px',
+                                color: 'var(--color-text-tertiary)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: 'var(--space-1)',
+                              }}>
+                                GPT-4 Score
+                              </div>
+                              <div style={{
+                                fontSize: '18px',
+                                fontWeight: 600,
+                                color: getScoreColor(p.gptScore),
+                              }}>
+                                {p.gptScore.toFixed(1)}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{
+                                fontSize: '11px',
+                                color: 'var(--color-text-tertiary)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: 'var(--space-1)',
+                              }}>
+                                Llama-3 Score
+                              </div>
+                              <div style={{
+                                fontSize: '18px',
+                                fontWeight: 600,
+                                color: getScoreColor(p.llamaScore),
+                              }}>
+                                {p.llamaScore.toFixed(1)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {p.aiDependencyDetected && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 'var(--space-2)',
+                              padding: 'var(--space-3)',
+                              background: 'var(--color-error-subtle)',
+                              border: '1px solid var(--color-error-border)',
+                              borderRadius: 'var(--radius-md)',
+                            }}>
+                              <span style={{ color: 'var(--color-error)', fontSize: '14px' }}>⚠</span>
+                              <span style={{
+                                fontSize: '13px',
+                                color: 'var(--color-error)',
+                                fontWeight: 500,
+                              }}>
+                                AI Dependency Detected
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                {p.aiDependencyDetected && (
-                  <div style={{ marginTop: '0.5rem', color: '#856404', fontWeight: 'bold' }}>
-                    ⚠️ AI Dependency Detected
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
+            </div>
+          </>
         )}
-      </div>
+      </main>
+
+      <style jsx global>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
-}
-
-function getScoreColor(score: number): string {
-  if (score >= 80) return '#28a745';
-  if (score >= 60) return '#5cb85c';
-  if (score >= 40) return '#ffc107';
-  if (score >= 20) return '#fd7e14';
-  return '#dc3545';
 }
