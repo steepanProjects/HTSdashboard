@@ -40,6 +40,13 @@ export default function Home() {
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
             <Link 
+              href="/leaderboard" 
+              className="btn btn-ghost"
+              style={{ textDecoration: 'none' }}
+            >
+              Leaderboard
+            </Link>
+            <Link 
               href="/admin" 
               className="btn btn-secondary"
               style={{ textDecoration: 'none' }}
@@ -139,7 +146,7 @@ export default function Home() {
               View Live Monitor
             </Link>
             <Link 
-              href="/admin" 
+              href="/leaderboard" 
               className="btn btn-secondary"
               style={{ 
                 textDecoration: 'none', 
@@ -147,7 +154,7 @@ export default function Home() {
                 fontSize: '15px',
               }}
             >
-              Manage Teams
+              View Leaderboard
             </Link>
           </div>
 

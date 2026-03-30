@@ -14,7 +14,14 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(teams);
+    
+    return NextResponse.json(teams, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch (error) {
     console.error('Error fetching teams:', error);
     return NextResponse.json({ error: 'Failed to fetch teams' }, { status: 500 });
