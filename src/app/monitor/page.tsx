@@ -9,10 +9,12 @@ interface TeamProgress {
   userId: string;
   startTime: string;
   endTime: string;
-  gptScore: number;
-  llamaScore: number;
-  meanScore: number;
-  progressPercentage?: number;
+  gptSummary?: string | null;
+  gptScore: number | null;
+  llamaSummary?: string | null;
+  llamaScore: number | null;
+  meanScore: number | null;
+  progressPercentage?: number | null;
   aiDependencyDetected: boolean;
   createdAt: string;
 }
@@ -35,6 +37,7 @@ interface Team {
   name: string;
   projectTitle: string;
   projectDescription: string;
+  liveSummary?: string | null;
   members: { id: string; name: string }[];
 }
 
@@ -44,11 +47,18 @@ export default function MonitorDashboard() {
   const [analyses, setAnalyses] = useState<ImageAnalysis[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string>('');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [mounted, setMounted] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     fetchTeams();
     const interval = setInterval(() => {
       fetchProgress();
+      fetchTeams(); // Also refresh teams to get updated live summary
       if (selectedTeam) fetchAnalyses();
       setLastUpdated(new Date());
     }, 5000);
@@ -94,6 +104,36 @@ export default function MonitorDashboard() {
     }
   };
 
+  const regenerateLiveSummary = async () => {
+    if (!selectedTeam || regenerating) return;
+    
+    setRegenerating(true);
+    try {
+      const res = await fetch('/api/admin/regenerate-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: selectedTeam }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        alert(`Error: ${error.error}`);
+        return;
+      }
+
+      const result = await res.json();
+      alert(`Successfully regenerated live summary from ${result.batchesProcessed} batches!`);
+      
+      // Refresh teams to get updated live summary
+      await fetchTeams();
+    } catch (error) {
+      console.error('Error regenerating summary:', error);
+      alert('Failed to regenerate live summary');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const teamProgress = selectedTeam ? progress[selectedTeam] || [] : [];
   const team = teams.find(t => t.id === selectedTeam);
 
@@ -102,10 +142,13 @@ export default function MonitorDashboard() {
   const aiFlaggedBatches = teamProgress.filter(p => p.aiDependencyDetected).length;
   const aiDependencyPercentage = totalBatches > 0 ? (aiFlaggedBatches / totalBatches) * 100 : 0;
   const isAiDrivenProject = aiDependencyPercentage >= 70;
-  const totalTeamProgress = teamProgress.reduce((sum, p) => sum + (p.progressPercentage || 0), 0);
+  const totalTeamProgress = teamProgress.reduce((sum, p) => {
+    const progress = p.progressPercentage != null ? Number(p.progressPercentage) : 0;
+    return sum + progress;
+  }, 0);
   const cappedTeamProgress = Math.min(totalTeamProgress, 100);
   const avgMeanScore = totalBatches > 0 
-    ? teamProgress.reduce((sum, p) => sum + p.meanScore, 0) / totalBatches 
+    ? teamProgress.reduce((sum, p) => sum + (p.meanScore != null ? Number(p.meanScore) : 0), 0) / totalBatches 
     : 0;
 
   const getScoreColor = (score: number): string => {
@@ -257,7 +300,7 @@ export default function MonitorDashboard() {
             fontSize: '13px',
             color: 'var(--color-text-tertiary)',
           }}>
-            Updated {lastUpdated.toLocaleTimeString()}
+            {mounted ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
           </span>
         </div>
 
@@ -323,6 +366,150 @@ export default function MonitorDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Live Consolidated Summary */}
+            {team.liveSummary ? (
+              <div className="card-elevated" style={{ 
+                padding: 'var(--space-6)', 
+                marginBottom: 'var(--space-6)',
+                background: 'linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-elevated) 100%)',
+                border: '2px solid var(--color-accent)',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  marginBottom: 'var(--space-5)',
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    background: 'var(--color-accent)',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                  }}>
+                    ⚡
+                  </div>
+                  <div>
+                    <h2 style={{
+                      fontSize: '20px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary)',
+                      marginBottom: 'var(--space-1)',
+                    }}>
+                      Live Consolidated Summary
+                    </h2>
+                    <p style={{
+                      fontSize: '13px',
+                      color: 'var(--color-text-tertiary)',
+                    }}>
+                      Comprehensive analysis of team progress, productivity, and insights
+                    </p>
+                  </div>
+                </div>
+                <div 
+                  style={{
+                    fontSize: '14px',
+                    lineHeight: 1.8,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: team.liveSummary
+                      .split('\n')
+                      .map(line => {
+                        // Headers
+                        if (line.startsWith('## ')) {
+                          return `<h3 style="font-size: 16px; font-weight: 600; color: var(--color-text-primary); margin-top: 24px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--color-border);">${line.replace('## ', '')}</h3>`;
+                        }
+                        // Bold text
+                        if (line.includes('**')) {
+                          return `<p style="margin: 8px 0; font-weight: 600; color: var(--color-text-primary);">${line.replace(/\*\*(.*?)\*\*/g, '$1')}</p>`;
+                        }
+                        // Bullet points with checkmark
+                        if (line.startsWith('✓ ')) {
+                          return `<div style="display: flex; gap: 8px; margin: 6px 0; padding: 8px; background: var(--color-success-subtle); border-left: 3px solid var(--color-success); border-radius: 4px;"><span style="color: var(--color-success); font-weight: 600;">✓</span><span>${line.replace('✓ ', '')}</span></div>`;
+                        }
+                        // Warning points
+                        if (line.startsWith('⚠ ')) {
+                          return `<div style="display: flex; gap: 8px; margin: 6px 0; padding: 8px; background: var(--color-warning-subtle); border-left: 3px solid var(--color-warning); border-radius: 4px;"><span style="color: var(--color-warning); font-weight: 600;">⚠</span><span>${line.replace('⚠ ', '')}</span></div>`;
+                        }
+                        // Regular bullet points
+                        if (line.startsWith('• ')) {
+                          return `<div style="display: flex; gap: 8px; margin: 6px 0; padding-left: 12px;"><span style="color: var(--color-accent); font-weight: 600;">•</span><span>${line.replace('• ', '')}</span></div>`;
+                        }
+                        // Recommendations
+                        if (line.startsWith('→ ')) {
+                          return `<div style="display: flex; gap: 8px; margin: 6px 0; padding: 8px; background: var(--color-surface-elevated); border-left: 3px solid var(--color-accent); border-radius: 4px;"><span style="color: var(--color-accent); font-weight: 600;">→</span><span>${line.replace('→ ', '')}</span></div>`;
+                        }
+                        // Regular paragraphs
+                        if (line.trim()) {
+                          return `<p style="margin: 8px 0; line-height: 1.6;">${line}</p>`;
+                        }
+                        return '';
+                      })
+                      .join('')
+                  }}
+                />
+              </div>
+            ) : totalBatches > 0 ? (
+              <div className="card-elevated" style={{ 
+                padding: 'var(--space-6)', 
+                marginBottom: 'var(--space-6)',
+                border: '2px dashed var(--color-border)',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 'var(--space-4)',
+                  textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    background: 'var(--color-surface-elevated)',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                  }}>
+                    📝
+                  </div>
+                  <div>
+                    <h3 style={{
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary)',
+                      marginBottom: 'var(--space-2)',
+                    }}>
+                      No Live Summary Yet
+                    </h3>
+                    <p style={{
+                      fontSize: '14px',
+                      color: 'var(--color-text-secondary)',
+                      marginBottom: 'var(--space-4)',
+                      maxWidth: '400px',
+                    }}>
+                      Generate a consolidated summary from {totalBatches} existing batch summaries
+                    </p>
+                  </div>
+                  <button
+                    onClick={regenerateLiveSummary}
+                    disabled={regenerating}
+                    className="btn btn-primary"
+                    style={{
+                      minWidth: '200px',
+                    }}
+                  >
+                    {regenerating ? 'Generating...' : '⚡ Generate Live Summary'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {/* Stats Grid */}
             <div style={{
@@ -490,7 +677,7 @@ export default function MonitorDashboard() {
                             color: 'var(--color-text-tertiary)',
                             fontFamily: 'monospace',
                           }}>
-                            {new Date(a.timestamp).toLocaleTimeString()}
+                            {mounted ? new Date(a.timestamp).toLocaleTimeString() : '--:--:--'}
                           </span>
                         </div>
                         
@@ -557,7 +744,7 @@ export default function MonitorDashboard() {
                     </div>
                   ) : (
                     teamProgress.map(p => {
-                      const badge = getScoreBadge(p.meanScore);
+                      const badge = getScoreBadge(p.meanScore || 0);
                       return (
                         <div 
                           key={p.id}
@@ -582,23 +769,23 @@ export default function MonitorDashboard() {
                                 color: 'var(--color-text-primary)',
                                 marginBottom: 'var(--space-1)',
                               }}>
-                                {new Date(p.startTime).toLocaleTimeString()} - {new Date(p.endTime).toLocaleTimeString()}
+                                {mounted ? `${new Date(p.startTime).toLocaleTimeString()} - ${new Date(p.endTime).toLocaleTimeString()}` : 'Loading...'}
                               </div>
                               <div style={{
                                 fontSize: '12px',
                                 color: 'var(--color-text-tertiary)',
                               }}>
-                                Progress: {p.progressPercentage?.toFixed(2)}%
+                                Progress: {p.progressPercentage != null ? p.progressPercentage.toFixed(2) : '0.00'}%
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <div style={{
                                 fontSize: '28px',
                                 fontWeight: 600,
-                                color: getScoreColor(p.meanScore),
+                                color: getScoreColor(p.meanScore || 0),
                                 lineHeight: 1,
                               }}>
-                                {p.meanScore.toFixed(1)}
+                                {(p.meanScore || 0).toFixed(1)}
                               </div>
                               <span className={`badge ${badge.class}`} style={{ marginTop: 'var(--space-2)' }}>
                                 {badge.label}
@@ -606,52 +793,94 @@ export default function MonitorDashboard() {
                             </div>
                           </div>
 
-                          {/* Model Scores */}
+                          {/* Model Summaries */}
                           <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
+                            display: 'flex',
+                            flexDirection: 'column',
                             gap: 'var(--space-3)',
-                            padding: 'var(--space-3)',
-                            background: 'var(--color-surface-elevated)',
-                            borderRadius: 'var(--radius-md)',
                             marginBottom: 'var(--space-3)',
                           }}>
-                            <div>
+                            {/* GPT Summary */}
+                            {p.gptSummary && (
                               <div style={{
-                                fontSize: '11px',
-                                color: 'var(--color-text-tertiary)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                marginBottom: 'var(--space-1)',
+                                padding: 'var(--space-3)',
+                                background: 'var(--color-surface-elevated)',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--color-border)',
                               }}>
-                                GPT-4 Score
+                                <div style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  marginBottom: 'var(--space-2)',
+                                }}>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    color: 'var(--color-text-tertiary)',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    fontWeight: 600,
+                                  }}>
+                                    GPT-4 Analysis
+                                  </div>
+                                  <div style={{
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: getScoreColor(p.gptScore || 0),
+                                  }}>
+                                    {(p.gptScore || 0).toFixed(1)}
+                                  </div>
+                                </div>
+                                <div style={{
+                                  fontSize: '13px',
+                                  lineHeight: 1.5,
+                                  color: 'var(--color-text-secondary)',
+                                }}>
+                                  {p.gptSummary}
+                                </div>
                               </div>
+                            )}
+
+                            {/* Llama Summary */}
+                            {p.llamaSummary && (
                               <div style={{
-                                fontSize: '18px',
-                                fontWeight: 600,
-                                color: getScoreColor(p.gptScore),
+                                padding: 'var(--space-3)',
+                                background: 'var(--color-surface-elevated)',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--color-border)',
                               }}>
-                                {p.gptScore.toFixed(1)}
+                                <div style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  marginBottom: 'var(--space-2)',
+                                }}>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    color: 'var(--color-text-tertiary)',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    fontWeight: 600,
+                                  }}>
+                                    Llama-3 Analysis
+                                  </div>
+                                  <div style={{
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: getScoreColor(p.llamaScore || 0),
+                                  }}>
+                                    {(p.llamaScore || 0).toFixed(1)}
+                                  </div>
+                                </div>
+                                <div style={{
+                                  fontSize: '13px',
+                                  lineHeight: 1.5,
+                                  color: 'var(--color-text-secondary)',
+                                }}>
+                                  {p.llamaSummary}
+                                </div>
                               </div>
-                            </div>
-                            <div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: 'var(--color-text-tertiary)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                marginBottom: 'var(--space-1)',
-                              }}>
-                                Llama-3 Score
-                              </div>
-                              <div style={{
-                                fontSize: '18px',
-                                fontWeight: 600,
-                                color: getScoreColor(p.llamaScore),
-                              }}>
-                                {p.llamaScore.toFixed(1)}
-                              </div>
-                            </div>
+                            )}
                           </div>
 
                           {p.aiDependencyDetected && (

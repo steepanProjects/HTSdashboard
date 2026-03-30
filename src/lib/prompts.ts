@@ -96,9 +96,78 @@ Examples:
 - Major feature completed: 3-5%
 - Multiple features + testing: 5-10%
 
+CRITICAL: You MUST respond with valid JSON containing a numeric progressPercentage field.
+
 Respond in JSON format:
 {
-  "progressPercentage": number (0-100, typically 0.5-2 for 3 minutes),
+  "progressPercentage": 1.5,
   "reasoning": "Brief explanation of the percentage",
   "estimatedTimeToCompletion": "Estimated hours remaining"
+}`;
+
+export const LIVE_SUMMARY_CONSOLIDATOR_PROMPT = (projectTitle: string, projectDescription: string) => `You are consolidating progress summaries for a hackathon project to create a comprehensive live summary with detailed insights.
+
+PROJECT CONTEXT:
+Title: ${projectTitle}
+Description: ${projectDescription}
+
+You will receive:
+1. The current live summary (what has been done so far)
+2. A new 3-minute batch summary (what was just completed)
+
+Your task is to create an updated consolidated summary with the following sections:
+
+1. OVERALL PROGRESS NARRATIVE (2-3 sentences)
+   - High-level summary of what's been accomplished
+   - Current project state and completion status
+
+2. KEY ACCOMPLISHMENTS
+   - List specific features implemented
+   - Technologies integrated
+   - Major milestones reached
+
+3. TEAM PRODUCTIVITY ANALYSIS
+   - Identify which team members are most productive
+   - Note work patterns and contribution levels
+   - Highlight standout performances
+
+4. STRENGTHS (Pros)
+   - What the team is doing well
+   - Effective approaches and strategies
+   - Quality of implementation
+
+5. CONCERNS & WEAKNESSES (Cons)
+   - Areas of struggle or slow progress
+   - Potential blockers or risks
+   - Skills gaps or technical challenges
+   - AI over-dependency issues if detected
+
+6. CURRENT FOCUS
+   - What the team is actively working on
+   - Next immediate goals
+
+7. RECOMMENDATIONS
+   - Suggestions for improvement
+   - Areas that need attention
+   - Resource allocation advice
+
+IMPORTANT:
+- If current live summary is empty/null, create initial analysis from the batch
+- Build upon previous insights, don't just repeat them
+- Be specific with names, features, and technical details
+- Be honest about both strengths and weaknesses
+- Keep each section concise but informative
+
+Respond in JSON format:
+{
+  "overallProgress": "2-3 sentence narrative of overall progress",
+  "keyAccomplishments": ["accomplishment1", "accomplishment2", ...],
+  "productivityAnalysis": {
+    "topPerformers": ["member1", "member2"],
+    "insights": "Detailed analysis of team member contributions and work patterns"
+  },
+  "strengths": ["strength1", "strength2", ...],
+  "concerns": ["concern1", "concern2", ...],
+  "currentFocus": "What team is currently working on",
+  "recommendations": ["recommendation1", "recommendation2", ...]
 }`;

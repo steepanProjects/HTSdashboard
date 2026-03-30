@@ -10,6 +10,14 @@ export async function GET() {
     });
 
     console.log(`📊 Fetched ${progress.length} batch summaries from DB`);
+    if (progress.length > 0) {
+      console.log('Sample progress item:', {
+        id: progress[0].id,
+        progressPercentage: progress[0].progressPercentage,
+        gptScore: progress[0].gptScore,
+        llamaScore: progress[0].llamaScore,
+      });
+    }
 
     const grouped = progress.reduce((acc, p) => {
       if (!acc[p.teamId]) acc[p.teamId] = [];

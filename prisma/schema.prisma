@@ -12,6 +12,7 @@ model Team {
   name               String
   projectTitle       String
   projectDescription String   @db.Text
+  liveSummary        String?  @db.Text
   members            Member[]
   progress           TeamProgress[]
   createdAt          DateTime @default(now())

@@ -83,7 +83,11 @@ class ProcessingQueue {
     // Get team project details
     const team = await prisma.team.findUnique({
       where: { id: teamId },
-      select: { projectTitle: true, projectDescription: true },
+      select: { 
+        projectTitle: true, 
+        projectDescription: true,
+        liveSummary: true,
+      },
     });
 
     if (!team) {
@@ -92,7 +96,7 @@ class ProcessingQueue {
     }
 
     // Import here to avoid circular dependency
-    const { summarizeBatch } = await import('./groq');
+    const { summarizeBatch, consolidateLiveSummary } = await import('./groq');
     const { saveBatchSummary } = await import('./db');
     
     const summary = await summarizeBatch(
@@ -103,6 +107,29 @@ class ProcessingQueue {
       team.projectDescription
     );
     await saveBatchSummary(summary);
+
+    // Consolidate the live summary
+    try {
+      console.log(`🔄 Consolidating live summary for team ${teamId}...`);
+      const batchSummaryText = `GPT Analysis: ${summary.gptSummary}\nLlama Analysis: ${summary.llamaSummary}\nProgress: ${summary.progressPercentage}%`;
+      const newLiveSummary = await consolidateLiveSummary(
+        team.liveSummary,
+        batchSummaryText,
+        team.projectTitle,
+        team.projectDescription
+      );
+
+      // Update team's live summary
+      await prisma.team.update({
+        where: { id: teamId },
+        data: { liveSummary: newLiveSummary },
+      });
+
+      console.log(`✅ Updated live summary for team ${teamId} (length: ${newLiveSummary.length} chars)`);
+    } catch (error) {
+      console.error(`❌ Failed to update live summary for team ${teamId}:`, error);
+      // Don't throw - batch summary was saved successfully, just log the error
+    }
   }
 
   getStatus() {
