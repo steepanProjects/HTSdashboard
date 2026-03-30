@@ -63,8 +63,11 @@ class ProcessingQueue {
       batch.push(result);
       this.userBatches.set(key, batch);
       
+      console.log(`📊 User ${result.userId} batch: ${batch.length}/6 analyses collected`);
+      
       // Check if we have 6 analyses for this user (3 minutes at 30-second intervals)
       if (batch.length >= 6) {
+        console.log(`🎯 Batch complete! Processing ${batch.length} analyses for user ${result.userId}`);
         await this.processBatch(result.userId, result.teamId, batch);
         this.userBatches.set(key, []); // Reset batch
       }
@@ -80,6 +83,8 @@ class ProcessingQueue {
   }
 
   private async processBatch(userId: string, teamId: string, analyses: ImageAnalysis[]) {
+    console.log(`📦 Processing batch for user ${userId}, team ${teamId} with ${analyses.length} analyses`);
+    
     // Get team project details
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -95,10 +100,13 @@ class ProcessingQueue {
       return;
     }
 
+    console.log(`📋 Team found: ${team.projectTitle}, current live summary length: ${team.liveSummary?.length || 0}`);
+
     // Import here to avoid circular dependency
     const { summarizeBatch, consolidateLiveSummary } = await import('./groq');
     const { saveBatchSummary } = await import('./db');
     
+    console.log(`🤖 Starting batch summarization...`);
     const summary = await summarizeBatch(
       userId,
       teamId,
@@ -106,7 +114,10 @@ class ProcessingQueue {
       team.projectTitle,
       team.projectDescription
     );
+    console.log(`✅ Batch summary created with progress: ${summary.progressPercentage}%`);
+    
     await saveBatchSummary(summary);
+    console.log(`💾 Batch summary saved to database`);
 
     // Consolidate the live summary
     try {

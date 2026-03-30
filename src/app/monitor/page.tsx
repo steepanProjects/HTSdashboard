@@ -49,6 +49,7 @@ export default function MonitorDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [mounted, setMounted] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -59,11 +60,23 @@ export default function MonitorDashboard() {
     const interval = setInterval(() => {
       fetchProgress();
       fetchTeams(); // Also refresh teams to get updated live summary
+      fetchQueueStatus();
       if (selectedTeam) fetchAnalyses();
       setLastUpdated(new Date());
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedTeam]);
+
+  const fetchQueueStatus = async () => {
+    try {
+      const res = await fetch('/api/status');
+      if (!res.ok) return;
+      const data = await res.json();
+      setQueueStatus(data);
+    } catch (error) {
+      console.error('Error fetching queue status:', error);
+    }
+  };
 
   const fetchTeams = async () => {
     try {
@@ -234,6 +247,18 @@ export default function MonitorDashboard() {
               }} />
               Live
             </div>
+            {queueStatus && (
+              <div style={{
+                fontSize: '12px',
+                color: 'var(--color-text-tertiary)',
+                padding: 'var(--space-2) var(--space-3)',
+                background: 'var(--color-surface-elevated)',
+                borderRadius: 'var(--radius-sm)',
+                fontFamily: 'monospace',
+              }}>
+                Queue: {queueStatus.pending}P / {queueStatus.processing}R / {queueStatus.completed}C
+              </div>
+            )}
             <Link 
               href="/admin" 
               className="btn btn-ghost"
