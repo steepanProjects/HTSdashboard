@@ -7,8 +7,9 @@ export async function GET() {
     
     const progress = await prisma.teamProgress.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 100,
     });
+
+    console.log(`📊 Fetched ${progress.length} batch summaries from DB`);
 
     const grouped = progress.reduce((acc, p) => {
       if (!acc[p.teamId]) acc[p.teamId] = [];

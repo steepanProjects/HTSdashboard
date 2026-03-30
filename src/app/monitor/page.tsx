@@ -73,6 +73,7 @@ export default function MonitorDashboard() {
       const res = await fetch('/api/monitor/progress');
       if (!res.ok) return;
       const data = await res.json();
+      console.log('Fetched progress data:', data);
       setProgress(data);
     } catch (error) {
       console.error('Error fetching progress:', error);
@@ -96,12 +97,22 @@ export default function MonitorDashboard() {
   const teamProgress = selectedTeam ? progress[selectedTeam] || [] : [];
   const team = teams.find(t => t.id === selectedTeam);
 
+  // Calculate overall AI dependency percentage
+  const totalBatches = teamProgress.length;
+  const aiFlaggedBatches = teamProgress.filter(p => p.aiDependencyDetected).length;
+  const aiDependencyPercentage = totalBatches > 0 ? (aiFlaggedBatches / totalBatches) * 100 : 0;
+  const isAiDrivenProject = aiDependencyPercentage >= 70;
+
+  // Calculate total team progress percentage (sum of all batch progress)
+  const totalTeamProgress = teamProgress.reduce((sum, p) => sum + (p.progressPercentage || 0), 0);
+  const cappedTeamProgress = Math.min(totalTeamProgress, 100); // Cap at 100%
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       <h1>Hackathon Monitor - Live Dashboard</h1>
 
-      <div style={{ marginTop: '2rem' }}>
-        <label style={{ marginRight: '1rem', fontWeight: 'bold' }}>Select Team:</label>
+      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <label style={{ fontWeight: 'bold' }}>Select Team:</label>
         <select
           value={selectedTeam}
           onChange={(e) => setSelectedTeam(e.target.value)}
@@ -111,6 +122,15 @@ export default function MonitorDashboard() {
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
+        <button
+          onClick={() => {
+            fetchProgress();
+            if (selectedTeam) fetchAnalyses();
+          }}
+          style={{ padding: '0.5rem 1rem', cursor: 'pointer', background: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
+        >
+          🔄 Refresh
+        </button>
       </div>
 
       {team && (
@@ -118,6 +138,40 @@ export default function MonitorDashboard() {
           <h2>{team.name}</h2>
           <p><strong>Project:</strong> {team.projectTitle}</p>
           <p><strong>Members:</strong> {Array.isArray(team.members) ? team.members.map(m => m.name).join(', ') : 'None'}</p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+            {/* Total Team Progress */}
+            <div style={{ padding: '1rem', background: 'white', borderRadius: '6px', border: '2px solid #007bff' }}>
+              <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>Total Team Progress</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#007bff' }}>
+                {cappedTeamProgress.toFixed(2)}%
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
+                Based on {totalBatches} batch{totalBatches !== 1 ? 'es' : ''} from all members
+              </div>
+            </div>
+
+            {/* AI Dependency Analysis */}
+            <div style={{ padding: '1rem', background: isAiDrivenProject ? '#fff3cd' : '#d4edda', borderRadius: '6px', border: `2px solid ${isAiDrivenProject ? '#ffc107' : '#28a745'}` }}>
+              <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>AI Dependency Analysis</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: isAiDrivenProject ? '#856404' : '#155724' }}>
+                {aiDependencyPercentage.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                {aiFlaggedBatches} out of {totalBatches} batches flagged
+              </div>
+              {isAiDrivenProject && (
+                <div style={{ marginTop: '0.5rem', color: '#856404', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                  ⚠️ WARNING: Heavily AI-driven (≥70%)
+                </div>
+              )}
+              {!isAiDrivenProject && aiDependencyPercentage > 0 && (
+                <div style={{ marginTop: '0.5rem', color: '#155724', fontSize: '0.9rem' }}>
+                  ✅ Acceptable AI usage
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -160,9 +214,9 @@ export default function MonitorDashboard() {
       </div>
 
       <div style={{ marginTop: '3rem' }}>
-        <h2>3-Minute Batch Summaries</h2>
+        <h2>3-Minute Batch Summaries ({teamProgress.length})</h2>
         {teamProgress.length === 0 ? (
-          <p style={{ color: '#666', marginTop: '1rem' }}>No activity recorded yet...</p>
+          <p style={{ color: '#666', marginTop: '1rem' }}>No batch summaries yet (need 6 screenshots = 3 minutes)...</p>
         ) : (
           <div style={{ marginTop: '1rem' }}>
             {teamProgress.map(p => (
