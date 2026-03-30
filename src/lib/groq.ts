@@ -1,0 +1,99 @@
+import Groq from 'groq-sdk';
+import { IncomingData, ImageAnalysis, BatchSummary } from '@/types';
+import { SCOUT_SYSTEM_PROMPT, SUMMARIZER_SYSTEM_PROMPT } from './prompts';
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+export async function analyzeImage(data: IncomingData): Promise<ImageAnalysis> {
+  const response = await groq.chat.completions.create({
+    model: process.env.GROQ_SCOUT_MODEL || 'llama-3.2-90b-vision-preview',
+    messages: [
+      {
+        role: 'system',
+        content: SCOUT_SYSTEM_PROMPT,
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Analyze this developer screenshot and determine what they are doing.',
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/png;base64,${data.image}`,
+            },
+          },
+        ],
+      },
+    ],
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+  });
+
+  const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+
+  return {
+    userId: data.userId,
+    teamId: data.teamId,
+    timestamp: data.timestamp,
+    countCycle: data.countCycle,
+    description: result.description || '',
+    aiDependencyFlag: result.aiDependencyFlag || false,
+    confidence: result.confidence || 0,
+  };
+}
+
+export async function summarizeBatch(
+  userId: string,
+  teamId: string,
+  analyses: ImageAnalysis[]
+): Promise<BatchSummary> {
+  const projectContext = 'Hackathon project - context will be provided by dashboard';
+  const analysisText = analyses.map((a, i) => 
+    `[${i + 1}] ${a.timestamp}: ${a.description} (AI flag: ${a.aiDependencyFlag})`
+  ).join('\n');
+
+  // GPT model summary
+  const gptResponse = await groq.chat.completions.create({
+    model: process.env.GROQ_GPT_MODEL || 'llama-3.1-70b-versatile',
+    messages: [
+      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectContext) },
+      { role: 'user', content: `Analyze these 15 minutes of activity:\n\n${analysisText}` },
+    ],
+    temperature: 0.4,
+    response_format: { type: 'json_object' },
+  });
+
+  const gptResult = JSON.parse(gptResponse.choices[0]?.message?.content || '{}');
+
+  // Llama model summary
+  const llamaResponse = await groq.chat.completions.create({
+    model: process.env.GROQ_LLAMA_MODEL || 'llama-3.1-70b-versatile',
+    messages: [
+      { role: 'system', content: SUMMARIZER_SYSTEM_PROMPT(projectContext) },
+      { role: 'user', content: `Analyze these 15 minutes of activity:\n\n${analysisText}` },
+    ],
+    temperature: 0.4,
+    response_format: { type: 'json_object' },
+  });
+
+  const llamaResult = JSON.parse(llamaResponse.choices[0]?.message?.content || '{}');
+
+  const meanScore = (gptResult.progressScore + llamaResult.progressScore) / 2;
+
+  return {
+    userId,
+    teamId,
+    startTime: analyses[0].timestamp,
+    endTime: analyses[analyses.length - 1].timestamp,
+    analyses,
+    gptSummary: gptResult.summary,
+    gptScore: gptResult.progressScore,
+    llamaSummary: llamaResult.summary,
+    llamaScore: llamaResult.progressScore,
+    meanScore,
+    aiDependencyDetected: gptResult.aiDependencyDetected || llamaResult.aiDependencyDetected,
+  };
+}

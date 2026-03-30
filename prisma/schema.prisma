@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  members   Member[]
+  progress  TeamProgress[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("teams")
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  analyses  ImageAnalysis[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("members")
+}
+
+model TeamProgress {
+  id                    Int      @id @default(autoincrement())
+  teamId                String
+  team                  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId                String
+  startTime             DateTime
+  endTime               DateTime
+  gptSummary            String?
+  gptScore              Float?
+  llamaSummary          String?
+  llamaScore            Float?
+  meanScore             Float?
+  aiDependencyDetected  Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_progress")
+}
+
+model ImageAnalysis {
+  id                Int      @id @default(autoincrement())
+  userId            String
+  member            Member   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId            String
+  timestamp         DateTime
+  countCycle        Int
+  description       String?
+  aiDependencyFlag  Boolean  @default(false)
+  confidence        Float?
+  createdAt         DateTime @default(now())
+
+  @@index([userId])
+  @@index([teamId])
+  @@map("image_analyses")
+}
